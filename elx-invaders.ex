@@ -33,17 +33,29 @@ defmodule T do
     IO.write "\e[2J"
   end
 
+  
+  def row_of_invaders(row,count,invader) do
+    for i <- 0..(count-1), do: [row,i,invader,5]
+  end
+
+  def multi_rows(grid,rows,cols,current_row,invader) do
+    case current_row do
+      0 -> [ row_of_invaders(current_row,cols,invader) | grid ]
+      _ -> [ row_of_invaders(current_row,cols,invader) | multi_rows(grid,rows,cols,current_row-1,invader) ]
+    end
+  end
+
+
+  def grid_of_invaders(rows,cols) do
+    top_rows = [ row_of_invaders(rows-1,cols,["<=>"]),
+                 row_of_invaders(rows-2,cols,["<o>"]) ]
+    multi_rows(top_rows,rows,cols,rows-3,["<x>"])
+  end
+
 
   def run_invaders do
-    up(20)
-    IO.puts "hello================================="
-    dn(5)
-    IO.puts "there+++++++++++++++++++++++++++++"
-    position(10,30)
     clear_screen()
-    draw(10,10,['xxx','XOX','XXX'])
-    dn(5)
-    nil
+    grid_of_invaders(5,10)
   end
 
 end
