@@ -63,39 +63,47 @@ defmodule T do
     top_rows ++ extra_rows
   end
 
-  def draw_column_of_invaders(         _,         _,      _,      _, []             ), do: nil
-  def draw_column_of_invaders(row_offset,col_offset,was_row,was_col, [invader|tail] )  do
+  def draw_column_of_invaders(          _,         _,      _,      _, []             ), do: nil
+  def draw_column_of_invaders( row_offset,col_offset,was_row,was_col, [invader|tail] )  do
     [row,col,spaceship,_status] = invader
     position(was_row + row, was_col + (col * 5))
     IO.write("   ")
     position(row_offset + row, col_offset + (col * 5))
     IO.write(spaceship)
-    :timer.sleep(50)
-    draw_column_of_invaders(row_offset,col_offset,was_row,was_col,tail)
+    :timer.sleep(5)
+    draw_column_of_invaders(   row_offset,col_offset,was_row,was_col, tail           )
   end
 
-  def draw_invaders(                 _,         _,      _,      _, []                     ), do: nil
-  def draw_invaders(        row_offset,col_offset,was_row,was_col, [col_of_invaders|tail] )  do
-    draw_column_of_invaders(row_offset,col_offset,was_row,was_col,  col_of_invaders       )
-    draw_invaders(row_offset,col_offset,was_row,was_col,tail)
+  def draw_invaders(                 _,         _,      _,      _,   []                    ), do: nil
+  def draw_invaders(         row_offset,col_offset,was_row,was_col, [col_of_invaders|tail] )  do
+    draw_column_of_invaders( row_offset,col_offset,was_row,was_col,  col_of_invaders       )
+    :timer.sleep(25)
+    draw_invaders(           row_offset,col_offset,was_row,was_col,  tail                  )
   end
 
-  def march_invaders(row_offset,col_offset,was_row,was_col,goi) do
-    draw_invaders(   row_offset,col_offset,was_row,was_col,goi)
+  def inner_march( cycle, row_offset, col_offset, goi ) do
+    System.cmd("bash",["-c","play march" <> to_string(cycle) <> ".mp3 1>/dev/null 2>/dev/null"])
+    :timer.sleep(150)
+    case cycle do
+      n when n > 2 -> march_invaders(         0, row_offset, col_offset + 1, row_offset, col_offset, goi )
+                 _ -> march_invaders( cycle + 1, row_offset, col_offset + 1, row_offset, col_offset, goi )
+    end
+  end
+
+  def march_invaders( cycle, row_offset,col_offset,was_row,was_col,goi ) do
+    draw_invaders(           row_offset,col_offset,was_row,was_col,goi )
     case col_offset do
 
-      n when n > 5 -> nil
+      n when n > 11 -> nil
 
-                 _ -> ( :timer.sleep(300) ; 
-                        march_invaders(row_offset, col_offset + 1 ,
-                                       row_offset, col_offset     ,goi) )
+                 _ -> inner_march( cycle, row_offset, col_offset, goi )
     end
   end
 
   def run_invaders do
     clear_screen()
     goi = grid_of_invaders(5, 10)
-    march_invaders(5,3,5,3,goi)
+    march_invaders(0,5,3,5,3,goi)
     dn(5)
   end
 end
