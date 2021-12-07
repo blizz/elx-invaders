@@ -8,3 +8,8 @@ erl_crash.dump
 *.beam
 /config/*.secret.exs
 .elixir_ls/
+
+# Ignore package tarball (built via "mix hex.build").
+elx_invaders-*.tar
+elx-invaders-*.tar
+
