@@ -1,5 +1,6 @@
 defmodule ElxInvaders do
   require Mutex
+  require KeyClient
   @moduledoc """
   Documentation for `ElxInvaders`.
   """
@@ -15,7 +16,7 @@ defmodule ElxInvaders do
       { Mutex, name: MyMutex, meta: "some_data" }
     ]
 
-    {:ok, _pid} = Supervisor.start_link(children, strategy: :one_for_one)    
+    {:ok, pid} = Supervisor.start_link(children, strategy: :one_for_one)    
 
     #strm = ExCmd.stream!(["cat","/dev/input/event2"],[exit_timeout: 100, chunk_size: 6])
 
@@ -26,6 +27,8 @@ defmodule ElxInvaders do
     cursor_off()
     run_invaders(screen_mutex)
     cursor_on()
+
+    Supervisor.stop(pid)
   end
 
   def test_ex_cmd(strm) do
@@ -164,27 +167,63 @@ defmodule ElxInvaders do
     end
   end
 
-  def spaceship_thread([row,col,direction],screen_mutex) do
+  def handle_key({ :left_pressed },  [] ),     do: [ :left_pressed  ]
+  def handle_key({ :right_pressed }, [] ),     do: [ :right_pressed ]
+  def handle_key({ :left_pressed },  [:right_pressed|_t] ), do: [ :left_pressed,  :right_pressed ]
+  def handle_key({ :right_pressed }, [:left_pressed |_t] ), do: [ :right_pressed, :left_pressed  ]
+
+  def handle_key({ :left_released },  [] ),                    do: []
+  def handle_key({ :left_released },  [:left_pressed  | t] ) , do: t
+  def handle_key({ :left_released },  [:right_pressed |_t] ) , do: [ :right_pressed ]
+  def handle_key({ :right_released }, [] )                   , do: []
+  def handle_key({ :right_released }, [:right_pressed | t] ) , do: t
+  def handle_key({ :right_released }, [:left_pressed  |_t] ) , do: [ :left_pressed ]
+
+  def spaceship_thread([row,col,direction],screen_mutex,key_state) do
+    key_state = receive do 
+      k -> handle_key(k,key_state)
+    after
+      0 -> key_state
+    end      
+
+    dir = case List.first(key_state) do
+      nil                    -> 0
+      []                     -> 0
+      [:left_pressed  | _t]  -> -1
+      [:right_pressed | _t]  ->  1
+      :left_pressed          -> -1
+      :right_pressed         ->  1
+    end
+
     lock = Mutex.await( MyMutex, screen_mutex )
     ElxInvaders.position(row,col)
     IO.write("   ")
-    ElxInvaders.position(row,col+direction)
+    ElxInvaders.position(row,col+dir)
     IO.write("=^=")
     Mutex.release(      MyMutex, lock )
     receive do 
       { :explode }   -> System.cmd("bash",["-c","play ship_exploding.mp3 1>/dev/null 2>/dev/null"]) 
       { :terminate } -> nil
     after
-      100 -> spaceship_thread([row,col+direction,direction],screen_mutex)
+      100 -> spaceship_thread([row,col+dir,dir],screen_mutex,key_state)
     end      
   end
 
+  def keyboard_thread(pid) do
+    KeyClient.recv(8080,pid)
+  end
+
   def run_invaders(screen_mutex) do
+
+    #System.cmd("bash",["-c","play march0.mp3 1>/dev/null 2>/dev/null"])
+
+
     clear_screen(screen_mutex)
     goi = grid_of_invaders(5, 10)
 
-    dbt = spawn( fn -> dropped_bombs_thread(     [ ]    , screen_mutex ) end )
-    spc = spawn( fn -> spaceship_thread(     [25, 2, 1] , screen_mutex ) end )
+    dbt = spawn( fn -> dropped_bombs_thread(     [ ]    , screen_mutex     ) end )
+    spc = spawn( fn -> spaceship_thread(     [25, 2, 1] , screen_mutex, [] ) end )
+    kyt = spawn( fn -> keyboard_thread(                spc                 ) end )
 
     march_invaders(0,5,3,5,3,goi,dbt,screen_mutex)
 
@@ -192,6 +231,7 @@ defmodule ElxInvaders do
 
     send( dbt, { :terminate } )
     send( spc, { :terminate } )
+    send( kyt, { :terminate } )
 
     dn(5)
   end
